@@ -1,0 +1,13 @@
+# Binary files
+adb
+scrcpy
+scrcpy-server
+icon.png
+scrcpy.1
+
+# MacOS
+.DS_Store
+
+# IDE files
+.idea/
+.vscode/
