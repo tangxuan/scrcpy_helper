@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# 本脚本为 scrcpy 无线投屏自动化工具，详细功能说明请见同目录下 README.md
+
 # ========== 配置与常量 ==========
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 readonly DEFAULT_PORT="5555"
@@ -38,18 +40,39 @@ restore_device_settings() {
             return 1
         fi
         
-        # 关闭 stay-awake
-        if ./adb -s "$target_device" shell "settings put global stay_on_while_plugged_in 0"; then
-            log_debug "已关闭 stay-awake 设置"
-        else
-            log_error "关闭 stay-awake 设置失败"
+        # 恢复 stay_awake 设置
+        if [ -n "$ORIGINAL_STAY_AWAKE" ]; then
+            if ./adb -s "$target_device" shell "settings put global stay_awake $ORIGINAL_STAY_AWAKE"; then
+                log_debug "已恢复 stay_awake 设置"
+            else
+                log_error "恢复 stay_awake 设置失败"
+            fi
         fi
         
-        # 打开屏幕
-        if ./adb -s "$target_device" shell "input keyevent KEYCODE_WAKEUP"; then
-            log_debug "已唤醒屏幕"
+        # 尝试主动锁屏（优先用SLEEP，失败则用POWER）
+        if ./adb -s "$target_device" shell "input keyevent KEYCODE_SLEEP"; then
+            log_debug "已通过SLEEP键锁屏"
+        elif ./adb -s "$target_device" shell "input keyevent KEYCODE_POWER"; then
+            log_debug "已通过POWER键锁屏"
         else
-            log_error "唤醒屏幕失败"
+            log_error "触发锁屏失败"
+        fi
+        
+        # 自动切换一次休眠时间，兼容部分ROM锁屏恢复
+        local orig_timeout
+        orig_timeout=$(./adb -s "$target_device" shell "settings get system screen_off_timeout" | tr -d '\r')
+        if [ -n "$orig_timeout" ]; then
+            ./adb -s "$target_device" shell "settings put system screen_off_timeout 60000"
+            ./adb -s "$target_device" shell "settings put system screen_off_timeout $orig_timeout"
+            log_debug "已自动切换休眠时间以兼容锁屏恢复"
+        fi
+        # 最后恢复锁屏设置
+        if [ -n "$ORIGINAL_LOCKSCREEN" ]; then
+            if ./adb -s "$target_device" shell "settings put secure lockscreen.disabled $ORIGINAL_LOCKSCREEN"; then
+                log_debug "已恢复锁屏设置"
+            else
+                log_error "恢复锁屏设置失败"
+            fi
         fi
         
         log_success "设备设置已恢复"
@@ -247,6 +270,21 @@ set_rotation() {
 start_scrcpy() {
     local target_device="$DEVICE_IP:$PORT"
     local scrcpy_opts=()
+    
+    # 保存当前设备设置
+    log_step "保存设备设置..."
+    # 保存当前的 stay_awake 设置
+    local current_stay_awake
+    current_stay_awake=$(./adb -s "$target_device" shell "settings get global stay_awake") || current_stay_awake="0"
+    export ORIGINAL_STAY_AWAKE="$current_stay_awake"
+    # 保存当前的锁屏设置
+    local current_lockscreen
+    current_lockscreen=$(./adb -s "$target_device" shell "settings get secure lockscreen.disabled") || current_lockscreen="0"
+    export ORIGINAL_LOCKSCREEN="$current_lockscreen"
+    
+    # 在scrcpy期间禁用锁屏，保持唤醒
+    ./adb -s "$target_device" shell "settings put secure lockscreen.disabled 1"
+    ./adb -s "$target_device" shell "settings put global stay_awake 1"
     
     # 基本配置
     scrcpy_opts+=("--turn-screen-off" "--stay-awake")
