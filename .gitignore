@@ -1,13 +1,29 @@
-# Binary files
+# 忽略二进制文件和系统文件
 adb
 scrcpy
 scrcpy-server
-icon.png
 scrcpy.1
+icon.png
 
-# MacOS
+# macOS系统文件
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
 
-# IDE files
+# IDE和编辑器文件
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+
+# Python相关
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.env
+.venv
+venv/
