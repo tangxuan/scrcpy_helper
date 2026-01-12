@@ -34,11 +34,10 @@
 
 3. 运行文本发送脚本：
    ```sh
-   python3 send_text.py [-f FILE] [-t TEXT] [-h]
+   python3 send_text.py "要发送的文本"
    ```
-   - `-f FILE` 从文件读取文本内容
-   - `-t TEXT` 直接指定文本内容
-   - `-h` 显示帮助信息
+   - 直接指定要发送的文本内容
+   - 支持中文输入
 
 ## 说明
 
