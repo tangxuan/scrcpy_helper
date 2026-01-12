@@ -33,6 +33,7 @@ class DeviceInfo:
     mode: str = "wireless"  # 连接模式：wireless/usb
     original_stay_awake: Optional[str] = None  # 原始保持唤醒设置
     original_lockscreen: Optional[str] = None  # 原始锁屏设置
+    original_input_method: Optional[str] = None  # 原始输入法
 
 class ScrcpyHelper:
     def __init__(self):
@@ -68,6 +69,19 @@ class ScrcpyHelper:
                 self.log_error(f"ADB命令执行失败: {e}")
                 raise
             return e
+
+    def get_current_input_method(self, target_device: str) -> str:
+        """获取当前输入法"""
+        result = self.run_adb(["-s", target_device, "shell", "settings", "get", "secure", "default_input_method"])
+        return result.stdout.strip()
+
+    def enable_input_method(self, target_device: str, ime: str) -> None:
+        """启用输入法"""
+        self.run_adb(["-s", target_device, "shell", "ime", "enable", ime], check=False)
+
+    def set_input_method(self, target_device: str, ime: str) -> None:
+        """设置输入法"""
+        self.run_adb(["-s", target_device, "shell", "ime", "set", ime])
 
     def restore_device_settings(self, target_device: str) -> None:
         """恢复设备设置"""
@@ -108,6 +122,14 @@ class ScrcpyHelper:
                 self.log_debug("已恢复锁屏设置")
             except subprocess.CalledProcessError:
                 self.log_error("恢复锁屏设置失败")
+
+        # 恢复原始输入法
+        if self.device_info.original_input_method is not None:
+            try:
+                self.set_input_method(target_device, self.device_info.original_input_method)
+                self.log_debug(f"已恢复原始输入法: {self.device_info.original_input_method}")
+            except subprocess.CalledProcessError:
+                self.log_error("恢复原始输入法失败")
 
         self.log_success("设备设置已恢复")
 
@@ -338,6 +360,19 @@ class ScrcpyHelper:
             self.device_info.original_lockscreen = result.stdout.strip()
         except subprocess.CalledProcessError:
             self.device_info.original_lockscreen = "0"
+        
+        # 保存当前输入法并切换为ADB Keyboard
+        try:
+            self.device_info.original_input_method = self.get_current_input_method(target_device)
+            self.log_debug(f"保存当前输入法: {self.device_info.original_input_method}")
+            
+            # 启用并设置ADB Keyboard
+            self.enable_input_method(target_device, "com.android.adbkeyboard/.AdbIME")
+            self.set_input_method(target_device, "com.android.adbkeyboard/.AdbIME")
+            self.log_debug("已切换到ADB Keyboard")
+        except subprocess.CalledProcessError as e:
+            self.log_error(f"切换输入法失败: {e}")
+            # 继续执行，不影响主流程
         
         # 在scrcpy期间禁用锁屏，保持唤醒
         self.run_adb(["-s", target_device, "shell", "settings put secure lockscreen.disabled 1"])
